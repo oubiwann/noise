@@ -41,7 +41,3 @@
       (clamp -1.0 1.0 (simplex (* scale (/ x w)) (* scale (/ y h)) -1.0))
       (clamp -1.0 1.0 (simplex (* scale (/ x w)) (* scale (/ y h))  0.0))
       (clamp -1.0 1.0 (simplex (* scale (/ x w)) (* scale (/ y h))  1.0))))))
-                  
-                  
-                  
-                  

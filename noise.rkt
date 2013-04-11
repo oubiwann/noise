@@ -3,14 +3,17 @@
 ; Direct translation of:
 ; http://webstaff.itn.liu.se/~stegu/simplexnoise/simplexnoise.pdf
 
+(require 
+ racket/flonum)
+
 (provide
  perlin
  simplex)
 
 (define grad3
-  '#(#( 1  1  0) #(-1  1  0) #( 1 -1  0) #(-1 -1  0)
-     #( 1  0  1) #(-1  0  1) #( 1  0 -1) #(-1  0 -1) 
-     #( 0  1  1) #( 0 -1  1) #( 0  1 -1) #( 0 -1 -1)))
+  '#(#( 1.0  1.0  0.0) #(-1.0  1.0  0.0) #( 1.0 -1.0  0.0) #(-1.0 -1.0  0.0)
+     #( 1.0  0.0  1.0) #(-1.0  0.0  1.0) #( 1.0  0.0 -1.0) #(-1.0  0.0 -1.0) 
+     #( 0.0  1.0  1.0) #( 0.0 -1.0  1.0) #( 0.0  1.0 -1.0) #( 0.0 -1.0 -1.0)))
 
 (define p
   '#(151 160 137 91 90 15 131 13 201 95 96 53 194 233 7 
@@ -35,24 +38,29 @@
 ; To remove the need for index wrapping, double the permutation table length
 (define perm (vector-append p p))
 
-; This method is a *lot* faster than using (int)Math.floor(x)
+; This method is a fl*lotfl* faster than using (int)Math.floor(x)
 ; TODO: Not sure if this is actually true in Racket
+; NOTE: Return a floating point so flonum operations work
 (define (fast-floor x)
   (inexact->exact (floor x)))
 
 (define (dot g x y z)
-  (+ (* (vector-ref g 0) x)
-     (* (vector-ref g 1) y)
-     (* (vector-ref g 2) z)))
+  (+ (fl* (vector-ref g 0) x)
+     (fl* (vector-ref g 1) y)
+     (fl* (vector-ref g 2) z)))
 
 (define (mix a b t)
-  (+ (* (- 1 t) a) (* t b)))
+  (+ (fl* (fl- 1.0 t) a) (fl* t b)))
 
 (define (fade t)
-  (* t t t (+ (* t (- (* t 6) 15)) 10)))
+  (fl* t (fl* t (fl* t (+ (fl* t (fl- (fl* t 6.0) 15.0)) 10.0)))))
 
 ; Classic Perlin noise, 3D version
 (define (perlin x [y 0.0] [z 0.0])
+  (set! x (exact->inexact x))
+  (set! y (exact->inexact y))
+  (set! z (exact->inexact z))
+  
   ; Find unit grid cell containing point
   (define X (fast-floor x))
   (define Y (fast-floor y))
@@ -80,13 +88,13 @@
   
   ; Calculate noise contributions from each of the eight corners
   (define n000 (dot (vector-ref grad3 gi000) x       y       z))
-  (define n100 (dot (vector-ref grad3 gi100) (- x 1) y       z))
-  (define n010 (dot (vector-ref grad3 gi010) x       (- y 1) z))
-  (define n110 (dot (vector-ref grad3 gi110) (- x 1) (- y 1) z))
-  (define n001 (dot (vector-ref grad3 gi001) x       y       (- z 1)))
-  (define n101 (dot (vector-ref grad3 gi101) (- x 1) y       (- z 1)))
-  (define n011 (dot (vector-ref grad3 gi011) x       (- y 1) (- z 1)))
-  (define n111 (dot (vector-ref grad3 gi111) (- x 1) (- y 1) (- z 1)))
+  (define n100 (dot (vector-ref grad3 gi100) (fl- x 1.0) y       z))
+  (define n010 (dot (vector-ref grad3 gi010) x       (fl- y 1.0) z))
+  (define n110 (dot (vector-ref grad3 gi110) (fl- x 1.0) (fl- y 1.0) z))
+  (define n001 (dot (vector-ref grad3 gi001) x       y       (fl- z 1.0)))
+  (define n101 (dot (vector-ref grad3 gi101) (fl- x 1.0) y       (fl- z 1.0)))
+  (define n011 (dot (vector-ref grad3 gi011) x       (fl- y 1.0) (fl- z 1.0)))
+  (define n111 (dot (vector-ref grad3 gi111) (fl- x 1.0) (fl- y 1.0) (fl- z 1.0)))
   
   ; Compute the fade curve value for each of x, y, z
   (define u (fade x))
@@ -107,22 +115,26 @@
   (mix nxy0 nxy1 w))
 
 ; 3D simplex noise
-(define F3 (/ 1.0 3.0)) ; Very nice and simple skew factor for 3D
-(define G3 (/ 1.0 6.0)) ; Very nice and simple unskew factor, too
+(define F3 (fl/ 1.0 3.0)) ; Very nice and simple skew factor for 3D
+(define G3 (fl/ 1.0 6.0)) ; Very nice and simple unskew factor, too
 (define (simplex xin [yin 0.0] [zin 0.0])
+  (set! xin (exact->inexact xin))
+  (set! yin (exact->inexact yin))
+  (set! zin (exact->inexact zin))
+  
   ; Skew the input space to determine which simplex cell we're in
-  (define s (* (+ xin yin zin) F3)) 
-  (define i (fast-floor (+ xin s)))
-  (define j (fast-floor (+ yin s)))
-  (define k (fast-floor (+ zin s)))
+  (define s (fl* (+ xin yin zin) F3)) 
+  (define i (floor (+ xin s)))
+  (define j (floor (+ yin s)))
+  (define k (floor (+ zin s)))
   
   (define t (* (+ i j k) G3))
-  (define X0 (- i t)) ; Unskew the cell origin back to (x,y,z) space
-  (define Y0 (- j t))
-  (define Z0 (- k t))
-  (define x0 (- xin X0)) ; The x,y,z distances from the cell origin
-  (define y0 (- yin Y0))
-  (define z0 (- zin Z0))
+  (define X0 (fl- i t)) ; Unskew the cell origin back to (x,y,z) space
+  (define Y0 (fl- j t))
+  (define Z0 (fl- k t))
+  (define x0 (fl- xin X0)) ; The x,y,z distances from the cell origin
+  (define y0 (fl- yin Y0))
+  (define z0 (fl- zin Z0))
   
   ; For the 3D case, the simplex shape is a slightly irregular tetrahedron.
   ; Determine which simplex we are in.
@@ -139,15 +151,15 @@
   ; a step of (0,1,0) in (i,j,k) means a step of (-c,1-c,-c) in (x,y,z), and
   ; a step of (0,0,1) in (i,j,k) means a step of (-c,-c,1-c) in (x,y,z), where
   ; c = 1/6.
-  (define x1 (+ (- x0 i1) G3)) ; Offsets for second corner in (x,y,z) coords
-  (define y1 (+ (- y0 j1) G3))
-  (define z1 (+ (- z0 k1) G3))
-  (define x2 (+ (- x0 i2) (* 2.0 G3))) ; Offsets for third corner in (x,y,z) coords
-  (define y2 (+ (- y0 j2) (* 2.0 G3))) 
-  (define z2 (+ (- z0 k2) (* 2.0 G3)))
-  (define x3 (+ (- x0 1.0) (* 3.0 G3))) ;  Offsets for last corner in (x,y,z) coords
-  (define y3 (+ (- y0 1.0) (* 3.0 G3)))
-  (define z3 (+ (- z0 1.0) (* 3.0 G3)))
+  (define x1 (+ (fl- x0 i1) G3)) ; Offsets for second corner in (x,y,z) coords
+  (define y1 (+ (fl- y0 j1) G3))
+  (define z1 (+ (fl- z0 k1) G3))
+  (define x2 (+ (fl- x0 i2) (fl* 2.0 G3))) ; Offsets for third corner in (x,y,z) coords
+  (define y2 (+ (fl- y0 j2) (fl* 2.0 G3))) 
+  (define z2 (+ (fl- z0 k2) (fl* 2.0 G3)))
+  (define x3 (+ (fl- x0 1.0) (fl* 3.0 G3))) ;  Offsets for last corner in (x,y,z) coords
+  (define y3 (+ (fl- y0 1.0) (fl* 3.0 G3)))
+  (define z3 (+ (fl- z0 1.0) (fl* 3.0 G3)))
   
   ; Work out the hashed gradient indices of the four simplex corners
   (define ii (bitwise-and i 255))
@@ -159,40 +171,40 @@
   (define gi3 (remainder (vector-ref perm (+ ii 1  (vector-ref perm (+ jj 1  (vector-ref perm (+ kk 1)))))) 12))
   
   ; Calculate the contribution from the four corners
-  (define t0 (- 0.5 (* x0 x0) (* y0 y0) (* z0 z0)))
+  (define t0 (fl- 0.5 (fl* x0 x0) (fl* y0 y0) (fl* z0 z0)))
   (define n0
     (if (< t0 0)
         0.0
         (begin
-          (set! t0 (* t0 t0))
-          (* t0 t0 (dot (vector-ref grad3 gi0) x0 y0 z0)))))
+          (set! t0 (fl* t0 t0))
+          (fl* t0 t0 (dot (vector-ref grad3 gi0) x0 y0 z0)))))
   
-  (define t1 (- 0.5 (* x1 x1) (* y1 y1) (* z1 z1)))
+  (define t1 (fl- 0.5 (fl* x1 x1) (fl* y1 y1) (fl* z1 z1)))
   (define n1
     (if (< t1 0)
         0.0
         (begin
-          (set! t1 (* t1 t1))
-          (* t1 t1 (dot (vector-ref grad3 gi1) x1 y1 z1)))))
+          (set! t1 (fl* t1 t1))
+          (fl* t1 t1 (dot (vector-ref grad3 gi1) x1 y1 z1)))))
   
-  (define t2 (- 0.5 (* x2 x2) (* y2 y2) (* z2 z2)))
+  (define t2 (fl- 0.5 (fl* x2 x2) (fl* y2 y2) (fl* z2 z2)))
   (define n2
     (if (< t2 0)
         0.0
         (begin
-          (set! t2 (* t2 t2))
-          (* t2 t2 (dot (vector-ref grad3 gi2) x2 y2 z2)))))
+          (set! t2 (fl* t2 t2))
+          (fl* t2 t2 (dot (vector-ref grad3 gi2) x2 y2 z2)))))
   
-  (define t3 (- 0.5 (* x3 x3) (* y3 y3) (* z3 z3)))
+  (define t3 (fl- 0.5 (fl* x3 x3) (fl* y3 y3) (fl* z3 z3)))
   (define n3
     (if (< t3 0)
         0.0
         (begin
-          (set! t3 (* t3 t3))
-          (* t3 t3 (dot (vector-ref grad3 gi3) x3 y3 z3)))))
+          (set! t3 (fl* t3 t3))
+          (fl* t3 t3 (dot (vector-ref grad3 gi3) x3 y3 z3)))))
   
   ; Add contributions from each corner to get the final noise value.
   ; The result is scaled to stay just inside [-1,1]
   ; NOTE: This scaling factor seems to work better than the given one
   ;       I'm not sure why
-  (* 76.5 (+ n0 n1 n2 n3)))
+  (fl* 76.5 (+ n0 n1 n2 n3)))
